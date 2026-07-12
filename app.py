@@ -240,33 +240,41 @@ def build_chat_messages(user_message: str, chat_history: list, user_profile: dic
 
 def generate_huggingface_text(messages: list, api_key: str, model_id: str = "meta-llama/Llama-3.3-70B-Instruct") -> str:
     prompt = format_prompt_for_model(messages, model_id)
-    url = f"https://api-inference.huggingface.co/models/{model_id}"
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "inputs": prompt,
-        "parameters": {
-            "max_new_tokens": int(os.getenv("MAX_NEW_TOKENS", 1200)),
-            "temperature": 0.7
+    endpoints = [
+        f"https://api-inference.huggingface.co/models/{model_id}",
+        f"https://router.huggingface.co/hf-inference/models/{model_id}",
+        f"https://api.huggingface.co/models/{model_id}"
+    ]
+    
+    last_err = None
+    for url in endpoints:
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
         }
-    }
-    try:
-        response = requests.post(url, headers=headers, json=payload, timeout=15)
-        response.raise_for_status()
-        result = response.json()
-        if isinstance(result, list) and len(result) > 0:
-            generated = result[0].get("generated_text", "")
-            if generated.startswith(prompt):
-                generated = generated[len(prompt):].strip()
-            return generated
-        elif isinstance(result, dict) and "generated_text" in result:
-            return result["generated_text"]
-        else:
-            raise ValueError(f"Unexpected HF response format: {result}")
-    except Exception as e:
-        raise RuntimeError(f"Hugging Face API call failed: {e}")
+        payload = {
+            "inputs": prompt,
+            "parameters": {
+                "max_new_tokens": int(os.getenv("MAX_NEW_TOKENS", 1200)),
+                "temperature": 0.7
+            }
+        }
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=12)
+            response.raise_for_status()
+            result = response.json()
+            if isinstance(result, list) and len(result) > 0:
+                generated = result[0].get("generated_text", "")
+                if generated.startswith(prompt):
+                    generated = generated[len(prompt):].strip()
+                return generated
+            elif isinstance(result, dict) and "generated_text" in result:
+                return result["generated_text"]
+        except Exception as e:
+            app.logger.warning(f"HF endpoint {url} failed: {e}")
+            last_err = e
+            
+    raise RuntimeError(f"Hugging Face API call failed: {last_err}")
 
 def get_llm_generation(messages: list, data: dict) -> tuple[str, str]:
     """
@@ -923,7 +931,7 @@ def debug_llm():
     # Test DNS resolution
     import socket
     dns_resolved = {}
-    for host in ["iam.cloud.ibm.com", "au-syd.ml.cloud.ibm.com", "api-inference.huggingface.co", "huggingface.co", "google.com"]:
+    for host in ["iam.cloud.ibm.com", "au-syd.ml.cloud.ibm.com", "api-inference.huggingface.co", "router.huggingface.co", "api.huggingface.co", "huggingface.co", "google.com"]:
         try:
             ip = socket.gethostbyname(host)
             dns_resolved[host] = ip
