@@ -754,6 +754,12 @@ body {
   color: var(--accent);
   font-weight: 600;
 }
+#strategyResult .md-content ol {
+  list-style-type: disc;
+}
+#strategyResult .md-content ul {
+  list-style-type: circle;
+}
 
 /* ── Progress / Metrics ───────────────────────────────────── */
 .metric-card {
